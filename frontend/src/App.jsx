@@ -10,11 +10,10 @@ function App() {
 
   // Authenticate Mock Partner to get SDK Token for Worker 1
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/v1/auth/sdk/token", {
+    fetch("http://127.0.0.1:8000/api/v1/mock-host/get-sdk-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        partner_api_key: "mock-partner-key-123",
         host_worker_id: "worker-1",
         occupation: "delivery_worker"
       })
@@ -77,7 +76,7 @@ function App() {
 
         {/* FlowShield */}
         {currentView === "safety" && (
-          <WorkerDashboard workerId={1} token={sdkToken} />
+          <WorkerDashboard token={sdkToken} />
         )}
 
         {/* Cart */}

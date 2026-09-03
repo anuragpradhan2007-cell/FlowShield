@@ -42,7 +42,7 @@ class Earning(Base):
 
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     worker_id = Column(String, ForeignKey("workers.id"), nullable=False, index=True)
-    amount = Column(Float, nullable=False)
+    amount = Column(Numeric(10, 2), nullable=False)
     currency = Column(String, default="USD")
     period_start = Column(DateTime, nullable=False)
     period_end = Column(DateTime, nullable=False)
@@ -56,7 +56,7 @@ class Transaction(Base):
 
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     worker_id = Column(String, ForeignKey("workers.id"), nullable=False, index=True)
-    amount = Column(Float, nullable=False)
+    amount = Column(Numeric(10, 2), nullable=False)
     transaction_type = Column(String, nullable=False)
     status = Column(String, nullable=False)
     transaction_time = Column(DateTime, default=datetime.datetime.utcnow)
