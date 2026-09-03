@@ -2,7 +2,7 @@ import workerData from "../worker-dashboard/workerData";
 
 const API_URL = "http://localhost:8000";
 
-export async function getWorkerDashboard(workerId, token) {
+export async function getWorkerDashboard(token) {
   try {
     const headers = {};
     if (token) {
@@ -10,7 +10,7 @@ export async function getWorkerDashboard(workerId, token) {
     }
 
     const response = await fetch(
-      `${API_URL}/api/v1/dashboard/worker/${workerId}`,
+      `${API_URL}/api/v1/dashboard/worker/me`,
       { headers }
     );
 

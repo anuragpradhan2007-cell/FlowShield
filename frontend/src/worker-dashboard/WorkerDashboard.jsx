@@ -9,17 +9,17 @@ import IncomeChart from "./components/IncomeChart";
 import EmergencyFund from "./components/EmergencyFund";
 import RecommendationCard from "./components/RecommendationCard";
 
-function WorkerDashboard({ workerId, token }) {
+function WorkerDashboard({ token }) {
   const [workerData, setWorkerData] = useState(null);
 
   useEffect(() => {
     async function loadWorkerData() {
-      const data = await getWorkerDashboard(workerId, token);
+      const data = await getWorkerDashboard(token);
       setWorkerData(data);
     }
 
     loadWorkerData();
-  }, [workerId]);
+  }, [token]);
 
   if (!workerData) {
     return (

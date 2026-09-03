@@ -7,18 +7,12 @@ from datetime import datetime, timedelta, timezone
 
 router = APIRouter()
 
-@router.get("/worker/{worker_id}")
-def get_worker_dashboard(
-    worker_id: str,
+@router.get("/worker/me")
+def get_worker_dashboard_me(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_worker)
 ):
-    # Authorization
-    if current_user.worker.id != worker_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Forbidden: Cannot access another worker's dashboard"
-        )
+    worker_id = current_user.worker.id
 
     # Fetch worker
     worker = db.query(models.Worker).filter(models.Worker.id == worker_id).first()
@@ -35,7 +29,7 @@ def get_worker_dashboard(
         models.Earning.period_end >= one_week_ago
     ).all()
     
-    weekly_income = sum([e.amount for e in earnings]) if earnings else 4200.0
+    weekly_income = sum([e.amount for e in earnings]) if earnings else 0.0
     
     # Format the data exactly as the frontend expects
     return {
