@@ -24,6 +24,11 @@ class UserCreate(UserBase):
     password: str = Field(..., min_length=6)
     occupation: str
 
+class SDKTokenRequest(BaseModel):
+    partner_api_key: str
+    host_worker_id: str
+    occupation: Optional[str] = "gig_worker"
+
 class UserLogin(UserBase):
     password: str
 
