@@ -31,7 +31,7 @@ function App() {
         if (!hostToken) return;
         
         // 3. Exchange host session token for B2B SDK Token
-        fetch(`${API_URL}/api/v1/mock-host/get-sdk-token`, {
+        fetch(`${API_URL}/api/v1/sdk/worker/get-token`, {
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
@@ -43,8 +43,8 @@ function App() {
         })
         .then((res) => res.json())
         .then((data) => {
-          if (data.access_token) {
-            setSdkToken(data.access_token);
+          if (data.sdk_token) {
+            setSdkToken(data.sdk_token);
           }
         })
         .catch((err) => console.error("SDK Auth Failed:", err));

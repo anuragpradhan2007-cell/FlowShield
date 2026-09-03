@@ -7,48 +7,7 @@ from auth.security import get_password_hash, verify_password, create_access_toke
 
 router = APIRouter()
 
-@router.post("/sdk/token", response_model=schemas.Token)
-def generate_sdk_token(
-    request: schemas.SDKTokenRequest,
-    db: Session = Depends(get_db)
-):
-    # Mock partner validation (in production, verify API Key against partners table)
-    if request.partner_api_key != "mock-partner-key-123":
-        raise HTTPException(status_code=401, detail="Invalid Partner API Key")
-        
-    # Generate deterministic email for SDK users
-    sdk_email = f"sdk_{request.host_worker_id}@sdk.flowshield.com"
-    
-    # Auto-provision user if they don't exist
-    user = db.query(models.User).filter(models.User.email == sdk_email).first()
-    if not user:
-        # Create user
-        hashed_password = get_password_hash("sdk-generated-password-do-not-use")
-        user = models.User(email=sdk_email, password_hash=hashed_password, role="WORKER")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        
-        # Create worker profile
-        worker = models.Worker(user_id=user.id, occupation=request.occupation)
-        db.add(worker)
-        db.commit()
-        db.refresh(worker)
-        db.refresh(user)
-        
-    worker = user.worker
-    worker_id = worker.id if worker else None
 
-    # Payload required by phase 3 & 8
-    access_token = create_access_token(
-        data={
-            "sub": str(user.id), 
-            "role": user.role,
-            "ai_consent_version": user.consent_version if user.ai_consent else None,
-            "worker_id": worker_id
-        }
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/register", response_model=schemas.UserProfileResponse)
 def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):

@@ -16,8 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import get_db
 import schemas
-from auth.router import generate_sdk_token
-from auth.dependencies import require_worker
+import sdk_router
 import models
 from app.ml.predictor import _load_model, is_model_available
 
@@ -46,32 +45,9 @@ app.include_router(workers_router.router, prefix="/api/v1/workers", tags=["worke
 app.include_router(dashboard_router.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 app.include_router(risk_router.router, prefix="/api/v1/workers", tags=["risk"])
 app.include_router(protection_router.router, prefix="/api/v1/protection", tags=["protection"])
+app.include_router(sdk_router.router, prefix="/api/v1/sdk", tags=["sdk"])
 
 @app.get("/api/v1/health")
 def health_check():
     return {"status": "ok", "model_loaded": is_model_available()}
 
-class MockHostTokenRequest(BaseModel):
-    occupation: str
-
-@app.post("/api/v1/mock-host/get-sdk-token")
-def mock_host_get_sdk_token(
-    request: MockHostTokenRequest, 
-    current_user: models.User = Depends(require_worker),
-    db: Session = Depends(get_db)
-):
-    # This endpoint acts as the Mock Host's backend server.
-    # It authenticates the user via the existing trusted authentication
-    # and derives the worker_id securely.
-    if not current_user.worker:
-        raise HTTPException(status_code=400, detail="Authenticated user is not a worker")
-        
-    secure_worker_id = current_user.worker.id
-
-    # It injects the secure partner_api_key server-side so it's not exposed in the browser bundle.
-    internal_request = schemas.SDKTokenRequest(
-        partner_api_key="mock-partner-key-123",
-        host_worker_id=secure_worker_id,
-        occupation=request.occupation
-    )
-    return generate_sdk_token(internal_request, db)
