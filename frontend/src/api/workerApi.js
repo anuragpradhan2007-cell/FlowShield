@@ -1,0 +1,23 @@
+import workerData from "../worker-dashboard/workerData";
+
+const API_URL = "http://localhost:8000";
+
+export async function getWorkerDashboard(workerId) {
+  try {
+    const response = await fetch(
+      `${API_URL}/dashboard/worker/${workerId}`
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch worker dashboard");
+    }
+
+    const data = await response.json();
+
+    return data;
+  } catch (error) {
+    console.log("Using demo worker data:", error.message);
+
+    return workerData;
+  }
+}
