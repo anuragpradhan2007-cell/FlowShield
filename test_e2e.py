@@ -67,4 +67,22 @@ print("Dashboard Response:")
 print(f"Stability Score: {data.get('stabilityScore')}")
 print(f"Risk Level: {data.get('riskLevel')}")
 print(f"Weekly Income: {data.get('weeklyIncome')}")
-print("SUCCESS: End-to-End Test Passed!")
+# 5. Test Protection Auto Contribute
+print("Auto Contributing to Emergency Pot...")
+resp = requests.post(f"{BASE_URL}/api/v1/protection/emergency-pot/auto-contribute", headers=headers)
+print("Auto Contribute Status:", resp.status_code)
+if resp.status_code != 200:
+    print("Failed to auto contribute:", resp.text)
+    exit(1)
+print("Auto Contribute Response:", resp.json())
+
+# 6. Test Credit Eligibility
+print("Checking Credit Eligibility...")
+resp = requests.get(f"{BASE_URL}/api/v1/protection/credit-eligibility", headers=headers)
+print("Credit Eligibility Status:", resp.status_code)
+if resp.status_code != 200:
+    print("Failed to check credit eligibility:", resp.text)
+    exit(1)
+print("Credit Eligibility Response:", resp.json())
+
+print("SUCCESS: End-to-End Test Passed with Financial Protection!")

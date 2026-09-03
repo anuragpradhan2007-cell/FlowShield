@@ -11,6 +11,7 @@ from users import router as users_router
 from workers import router as workers_router
 import dashboard_router
 import risk_router
+from protection import router as protection_router
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import get_db
@@ -44,6 +45,7 @@ app.include_router(users_router.router, prefix="/api/v1", tags=["users"])
 app.include_router(workers_router.router, prefix="/api/v1/workers", tags=["workers"])
 app.include_router(dashboard_router.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 app.include_router(risk_router.router, prefix="/api/v1/workers", tags=["risk"])
+app.include_router(protection_router.router, prefix="/api/v1/protection", tags=["protection"])
 
 @app.get("/api/v1/health")
 def health_check():

@@ -73,6 +73,13 @@ def get_worker_dashboard_me(
     if previous_weekly_income > 0:
         income_change = ((weekly_income - previous_weekly_income) / previous_weekly_income) * 100
 
+    emergency_pot = db.query(models.EmergencyPot).filter(
+        models.EmergencyPot.worker_id == worker_id
+    ).first()
+    
+    emergency_fund = emergency_pot.balance if emergency_pot else 0.0
+    emergency_target = round(weekly_income * 0.10, 2)
+
     return {
         "name": current_user.email.split('@')[0],
         "role": worker.occupation,
@@ -80,7 +87,7 @@ def get_worker_dashboard_me(
         "riskLevel": risk_level,
         "weeklyIncome": weekly_income,
         "incomeChange": round(income_change, 1),
-        "emergencyFund": 0,
-        "emergencyTarget": 0,
+        "emergencyFund": emergency_fund,
+        "emergencyTarget": emergency_target,
         "incomeHistory": income_history
     }

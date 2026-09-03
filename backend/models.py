@@ -36,6 +36,9 @@ class Worker(Base):
     user = relationship("User", back_populates="worker")
     earnings = relationship("Earning", back_populates="worker")
     transactions = relationship("Transaction", back_populates="worker")
+    emergency_pot = relationship("EmergencyPot", back_populates="worker", uselist=False)
+    credit_assessments = relationship("CreditAssessment", back_populates="worker")
+    notifications = relationship("Notification", back_populates="worker")
 
 class Earning(Base):
     __tablename__ = "earnings"
@@ -63,3 +66,39 @@ class Transaction(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     worker = relationship("Worker", back_populates="transactions")
+
+class EmergencyPot(Base):
+    __tablename__ = "emergency_pots"
+
+    id = Column(String, primary_key=True, default=generate_uuid, index=True)
+    worker_id = Column(String, ForeignKey("workers.id"), unique=True, nullable=False)
+    balance = Column(Float, default=0.0)
+    total_contributed = Column(Float, default=0.0)
+    total_used = Column(Float, default=0.0)
+
+    worker = relationship("Worker", back_populates="emergency_pot")
+
+class CreditAssessment(Base):
+    __tablename__ = "credit_assessments"
+
+    id = Column(String, primary_key=True, default=generate_uuid, index=True)
+    worker_id = Column(String, ForeignKey("workers.id"), nullable=False)
+    stability_score = Column(Float, nullable=False)
+    risk_level = Column(String, nullable=False)
+    eligible = Column(Boolean, default=False)
+    credit_limit = Column(Float, default=0.0)
+    reason = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    worker = relationship("Worker", back_populates="credit_assessments")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(String, primary_key=True, default=generate_uuid, index=True)
+    worker_id = Column(String, ForeignKey("workers.id"), nullable=False)
+    type = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    worker = relationship("Worker", back_populates="notifications")
