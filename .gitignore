@@ -1,0 +1,15 @@
+# Environments
+venv/
+env/
+.env
+__pycache__/
+*.pyc
+
+# Database
+*.sqlite3
+*.db
+
+# IDEs and Tools
+.vscode/
+.idea/
+.gemini/
