@@ -74,7 +74,10 @@ print("Auto Contribute Status:", resp.status_code)
 if resp.status_code != 200:
     print("Failed to auto contribute:", resp.text)
     exit(1)
-print("Auto Contribute Response:", resp.json())
+auto_resp = resp.json()
+print("Auto Contribute Response:", auto_resp)
+assert "contribution" in auto_resp, "Missing contribution in response"
+assert "emergency_pot_balance" in auto_resp, "Missing emergency_pot_balance in response"
 
 # 6. Test Credit Eligibility
 print("Checking Credit Eligibility...")
@@ -83,6 +86,18 @@ print("Credit Eligibility Status:", resp.status_code)
 if resp.status_code != 200:
     print("Failed to check credit eligibility:", resp.text)
     exit(1)
-print("Credit Eligibility Response:", resp.json())
+credit_resp = resp.json()
+print("Credit Eligibility Response:", credit_resp)
+assert "eligible" in credit_resp, "Missing eligible in credit response"
+assert "credit_limit" in credit_resp, "Missing credit_limit in credit response"
+
+# 7. Re-check dashboard for emergency fund persistence
+print("Verifying Dashboard emergencyFund...")
+resp = requests.get(f"{BASE_URL}/api/v1/dashboard/worker/me", headers=headers)
+if resp.status_code != 200:
+    print("Failed to get dashboard:", resp.text)
+    exit(1)
+dash_data = resp.json()
+assert dash_data["emergencyFund"] == auto_resp["emergency_pot_balance"], "Dashboard emergencyFund does not match pot balance"
 
 print("SUCCESS: End-to-End Test Passed with Financial Protection!")

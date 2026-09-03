@@ -72,9 +72,11 @@ class EmergencyPot(Base):
 
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     worker_id = Column(String, ForeignKey("workers.id"), unique=True, nullable=False)
-    balance = Column(Float, default=0.0)
-    total_contributed = Column(Float, default=0.0)
-    total_used = Column(Float, default=0.0)
+    balance = Column(Numeric(10, 2), default=0.0)
+    total_contributed = Column(Numeric(10, 2), default=0.0)
+    total_used = Column(Numeric(10, 2), default=0.0)
+    period_contributed = Column(Numeric(10, 2), default=0.0)
+    period_start = Column(DateTime, default=datetime.datetime.utcnow)
 
     worker = relationship("Worker", back_populates="emergency_pot")
 
@@ -86,7 +88,7 @@ class CreditAssessment(Base):
     stability_score = Column(Float, nullable=False)
     risk_level = Column(String, nullable=False)
     eligible = Column(Boolean, default=False)
-    credit_limit = Column(Float, default=0.0)
+    credit_limit = Column(Numeric(10, 2), default=0.0)
     reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 

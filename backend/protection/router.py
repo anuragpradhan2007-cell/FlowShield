@@ -50,27 +50,36 @@ def auto_contribute(
 
     pot = db.query(models.EmergencyPot).filter(
         models.EmergencyPot.worker_id == worker_id
-    ).first()
+    ).with_for_update().first()
 
     if pot is None:
         pot = models.EmergencyPot(
             worker_id=worker_id,
             balance=0.0,
             total_contributed=0.0,
-            total_used=0.0
+            total_used=0.0,
+            period_contributed=0.0,
+            period_start=datetime.utcnow()
         )
         db.add(pot)
+    else:
+        # Check if we are in a new rolling period
+        one_week_ago = datetime.utcnow() - timedelta(days=7)
+        if pot.period_start < one_week_ago:
+            pot.period_contributed = 0.0
+            pot.period_start = datetime.utcnow()
 
     total_target = round(contribution, 2)
-    new_contribution = total_target - pot.total_contributed
+    new_contribution = total_target - float(pot.period_contributed)
     
     if new_contribution < 0:
         new_contribution = 0.0
 
     new_contribution = round(new_contribution, 2)
     
-    pot.balance += new_contribution
-    pot.total_contributed += new_contribution
+    pot.balance = float(pot.balance) + new_contribution
+    pot.total_contributed = float(pot.total_contributed) + new_contribution
+    pot.period_contributed = float(pot.period_contributed) + new_contribution
 
     db.commit()
     db.refresh(pot)
@@ -91,7 +100,7 @@ def release_emergency_funds(
     
     pot = db.query(models.EmergencyPot).filter(
         models.EmergencyPot.worker_id == worker_id
-    ).first()
+    ).with_for_update().first()
 
     if pot is None or pot.balance <= 0:
         raise HTTPException(status_code=400, detail="Insufficient Emergency Pot funds")
@@ -114,8 +123,8 @@ def release_emergency_funds(
     if release_amount <= 0:
         raise HTTPException(status_code=400, detail="Requested amount must be greater than zero")
 
-    pot.balance -= release_amount
-    pot.total_used += release_amount
+    pot.balance = float(pot.balance) - release_amount
+    pot.total_used = float(pot.total_used) + release_amount
 
     notification = models.Notification(
         worker_id=worker_id,
