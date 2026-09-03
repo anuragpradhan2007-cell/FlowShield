@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
 from auth import router as auth_router
@@ -33,16 +33,31 @@ def health_check():
     return {"status": "ok"}
 
 class MockHostTokenRequest(BaseModel):
-    host_worker_id: str
     occupation: str
 
+# Mock server-side session store mapping session tokens to worker IDs
+MOCK_SESSION_STORE = {
+    "mock-session-123": "worker-1"
+}
+
 @app.post("/api/v1/mock-host/get-sdk-token")
-def mock_host_get_sdk_token(request: MockHostTokenRequest, db: Session = Depends(get_db)):
+def mock_host_get_sdk_token(
+    request: MockHostTokenRequest, 
+    host_session_token: str = Header(..., alias="X-Host-Session-Token"),
+    db: Session = Depends(get_db)
+):
     # This endpoint acts as the Mock Host's backend server.
+    # It authenticates the user via a trusted server-side session token
+    # and derives the worker_id securely.
+    if host_session_token not in MOCK_SESSION_STORE:
+        raise HTTPException(status_code=401, detail="Invalid host session token")
+        
+    secure_worker_id = MOCK_SESSION_STORE[host_session_token]
+
     # It injects the secure partner_api_key server-side so it's not exposed in the browser bundle.
     internal_request = schemas.SDKTokenRequest(
         partner_api_key="mock-partner-key-123",
-        host_worker_id=request.host_worker_id,
+        host_worker_id=secure_worker_id,
         occupation=request.occupation
     )
     return generate_sdk_token(internal_request, db)

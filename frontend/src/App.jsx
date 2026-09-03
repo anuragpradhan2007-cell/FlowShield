@@ -12,9 +12,11 @@ function App() {
   useEffect(() => {
     fetch("http://127.0.0.1:8000/api/v1/mock-host/get-sdk-token", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-Host-Session-Token": "mock-session-123" 
+      },
       body: JSON.stringify({
-        host_worker_id: "worker-1",
         occupation: "delivery_worker"
       })
     })
