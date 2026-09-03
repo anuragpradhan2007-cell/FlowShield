@@ -62,6 +62,10 @@ class MetricsBreakdown(BaseModel):
         default=None,
         description="Weight 10%: Weather or environmental disruptions"
     )
+    pot_summary: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Threshold comparison, pot contributions, and status persistence tracking"
+    )
     raw_inputs_summary: Optional[Dict[str, Any]] = Field(
         default_factory=dict,
         description="Summary of raw data ingested from Member 2"
@@ -83,6 +87,9 @@ class DailyIncomeRecord(BaseModel):
     hours_worked: Optional[float] = Field(default=None, ge=0.0, description="Optional active hours")
     trips_completed: Optional[int] = Field(default=None, ge=0, description="Optional completed tasks/trips")
     is_missing_data: Optional[bool] = Field(default=False, description="Flag indicating missing/unreported data gap")
+    threshold: Optional[float] = Field(default=None, ge=0.0, description="Target daily earning threshold ($)")
+    surplus: Optional[float] = Field(default=None, description="Surplus earnings above threshold ($)")
+    pot_contribution: Optional[float] = Field(default=None, ge=0.0, description="Amount contributed to emergency pot ($)")
 
 
 class WorkerDataInput(BaseModel):
@@ -120,6 +127,22 @@ class WorkerDataInput(BaseModel):
         ge=1,
         le=31,
         description="Expected active work days per month capacity (default: 24)"
+    )
+    earning_threshold: float = Field(
+        default=100.0,
+        ge=0.0,
+        description="Daily earnings benchmark threshold for surplus comparison ($)"
+    )
+    pot_contribution_rate: float = Field(
+        default=0.20,
+        ge=0.0,
+        le=1.0,
+        description="Percentage of surplus automatically contributed to emergency pot (default 20%)"
+    )
+    community_pot_balance: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Current accumulated worker balance in emergency/community pot ($)"
     )
 
 

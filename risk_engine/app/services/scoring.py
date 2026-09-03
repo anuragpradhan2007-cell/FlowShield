@@ -98,6 +98,16 @@ def detect_anomaly_flags(
     if breakdown.external_risk_factors and breakdown.external_risk_factors.normalized_score <= 30.0:
         flags.append("SEVERE_EXTERNAL_DISRUPTION")
 
+    # Threshold comparison & Pot vulnerability triggers
+    if breakdown.pot_summary:
+        pot = breakdown.pot_summary
+        def_streak = pot.get("current_deficit_streak", 0)
+
+        if def_streak >= 14:
+            flags.append("PERSISTENT_DEFICIT_NO_CONTRIBUTION")
+        elif def_streak >= 7:
+            flags.append("PROLONGED_EARNINGS_DEFICIT")
+
     return flags
 
 
@@ -107,12 +117,14 @@ def evaluate_worker_risk(
     """
     Master end-to-end evaluation pipeline for a worker:
     1. Extracts and calculates all 5 feature metrics with variance tracking.
-    2. Calculates the bounded composite Stability Score.
-    3. Classifies the worker into a standardized RiskTier.
-    4. Detects downstream anomaly trigger flags for Member 4.
-    5. Injects composite summary into explainability notes for Member 5 frontend tooltips.
+    2. Evaluates daily earnings against threshold, computes surplus/pot contributions,
+       and updates status if surplus or deficit persists over time.
+    3. Calculates the bounded composite Stability Score.
+    4. Classifies the worker into a standardized RiskTier.
+    5. Detects downstream anomaly trigger flags for Member 4.
+    6. Injects composite summary into explainability notes for Member 5 frontend tooltips.
     """
-    # 1. Feature extraction
+    # 1. Feature extraction & Pot simulation
     breakdown = extract_worker_metrics(input_data)
 
     # 2. Composite score calculation
@@ -121,6 +133,12 @@ def evaluate_worker_risk(
     # 3. Risk tier classification
     risk_tier = classify_risk_tier(stability_score)
 
+    # Long-term status update if deficit has persisted for 14+ days
+    if breakdown.pot_summary:
+        pot = breakdown.pot_summary
+        if pot.get("current_deficit_streak", 0) >= 14 and risk_tier == RiskTier.STABLE:
+            risk_tier = RiskTier.AT_RISK
+
     # 4. Anomaly flags for Member 4
     anomaly_flags = detect_anomaly_flags(breakdown, stability_score, risk_tier)
 
@@ -128,9 +146,15 @@ def evaluate_worker_risk(
     if breakdown.explainability_notes is None:
         breakdown.explainability_notes = {}
 
+    pot_info = breakdown.pot_summary or {}
     breakdown.explainability_notes.update({
         "composite_stability_score": stability_score,
         "assigned_risk_tier": risk_tier.value,
+        "pot_evaluated_status": pot_info.get("updated_status"),
+        "pot_status_reason": pot_info.get("status_reason"),
+        "total_pot_accumulated": pot_info.get("current_pot_balance", 0.0),
+        "total_surplus_generated": pot_info.get("total_surplus_generated", 0.0),
+        "status_cycle_history": pot_info.get("status_cycle_history", []),
         "anomaly_flags_triggered": anomaly_flags,
         "score_formula": (
             f"Stability Score = (0.30 * {breakdown.income_consistency.normalized_score:.1f}) + "

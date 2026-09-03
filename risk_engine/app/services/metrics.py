@@ -272,17 +272,170 @@ def calculate_recent_income_trend(
     )
 
 
+def calculate_pot_and_surplus_metrics(
+    df: pd.DataFrame,
+    threshold: float = 100.0,
+    contribution_rate: float = 0.20,
+    initial_pot_balance: float = 0.0,
+    streak_window: int = 7,
+) -> Dict[str, Any]:
+    """
+    Compares daily earnings against the target benchmark threshold:
+    - If daily earning > threshold (surplus):
+        surplus = earning - threshold
+        pot_contribution = surplus * contribution_rate (contributed to emergency pot)
+    - If daily earning <= threshold:
+        surplus = 0.0
+        pot_contribution = 0.0 (do nothing)
+
+    Long-term status persistence & variation:
+    - If surplus continues for a prolonged period (>= streak_window days):
+        Updates status toward 'Stable' (Active Pot Contributor).
+    - If deficit continues for a prolonged period (>= streak_window days):
+        Updates status toward 'At Risk'.
+    - If deficit persists over 14+ days or prolonged drop:
+        Updates status toward 'Critical'.
+    - Cycles dynamically between status tiers as worker earnings fluctuate over time.
+    """
+    if df.empty:
+        return {
+            "earning_threshold": threshold,
+            "contribution_rate": contribution_rate,
+            "total_surplus_generated": 0.0,
+            "total_pot_contributions": 0.0,
+            "current_pot_balance": round(float(initial_pot_balance), 2),
+            "days_evaluated": 0,
+            "days_with_surplus": 0,
+            "days_with_deficit": 0,
+            "current_surplus_streak": 0,
+            "current_deficit_streak": 0,
+            "max_surplus_streak": 0,
+            "max_deficit_streak": 0,
+            "updated_status": "Critical",
+            "status_reason": "No income records available. Status set to Critical.",
+            "status_cycle_history": [],
+            "daily_records_summary": [],
+        }
+
+    amounts = df["amount"].to_numpy()
+    dates = df["date"].tolist()
+
+    total_surplus = 0.0
+    total_contributions = 0.0
+    accumulated_pot = float(initial_pot_balance)
+    days_surplus = 0
+    days_deficit = 0
+
+    surplus_streak = 0
+    deficit_streak = 0
+    max_surplus_streak = 0
+    max_deficit_streak = 0
+
+    status = "Stable" if amounts[0] >= threshold else "At Risk"
+    cycle_history = []
+    daily_summaries = []
+
+    for i, amt in enumerate(amounts):
+        day_date = dates[i].strftime("%Y-%m-%d") if hasattr(dates[i], "strftime") else str(dates[i])[:10]
+        if amt > threshold:
+            surplus = round(float(amt - threshold), 2)
+            contrib = round(float(surplus * contribution_rate), 2)
+            action = f"Contribute ${contrib:.2f} to Pot"
+            days_surplus += 1
+            surplus_streak += 1
+            deficit_streak = 0
+        else:
+            surplus = 0.0
+            contrib = 0.0
+            action = "Do nothing (At or below threshold)"
+            days_deficit += 1
+            deficit_streak += 1
+            surplus_streak = 0
+
+        total_surplus += surplus
+        total_contributions += contrib
+        accumulated_pot += contrib
+
+        max_surplus_streak = max(max_surplus_streak, surplus_streak)
+        max_deficit_streak = max(max_deficit_streak, deficit_streak)
+
+        # Dynamic Status Update & Cycling
+        old_status = status
+        if surplus_streak >= streak_window:
+            status = "Stable"
+        elif deficit_streak >= (streak_window * 2):  # 14+ days of sustained deficit
+            status = "Critical"
+        elif deficit_streak >= streak_window:        # 7-13 days of sustained deficit
+            status = "At Risk"
+
+        if status != old_status:
+            cycle_history.append({
+                "day_index": i + 1,
+                "date": day_date,
+                "from_status": old_status,
+                "to_status": status,
+                "trigger": (
+                    f"Surplus sustained for {surplus_streak} days"
+                    if surplus_streak >= streak_window
+                    else f"Deficit sustained for {deficit_streak} days"
+                ),
+                "pot_balance": round(accumulated_pot, 2),
+            })
+
+        daily_summaries.append({
+            "day": i + 1,
+            "date": day_date,
+            "earning": round(float(amt), 2),
+            "threshold": threshold,
+            "surplus": surplus,
+            "pot_contribution": contrib,
+            "action": action,
+            "accumulated_pot": round(accumulated_pot, 2),
+            "status": status,
+        })
+
+    # Summary diagnosis
+    if deficit_streak >= (streak_window * 2):
+        status_reason = f"Deficit has persisted for {deficit_streak} consecutive days below ${threshold:.2f} threshold with $0 pot contributions. Status downgraded to Critical."
+    elif deficit_streak >= streak_window:
+        status_reason = f"Deficit has persisted for {deficit_streak} consecutive days below ${threshold:.2f} threshold. Status set to At Risk."
+    elif surplus_streak >= streak_window:
+        status_reason = f"Surplus sustained for {surplus_streak} consecutive days above ${threshold:.2f} threshold (${total_contributions:.2f} contributed to pot). Status elevated to Stable."
+    else:
+        status_reason = f"Earnings cycle active. Current status: {status} (Surplus streak: {surplus_streak}d, Deficit streak: {deficit_streak}d, Pot balance: ${accumulated_pot:.2f})."
+
+    return {
+        "earning_threshold": threshold,
+        "contribution_rate": contribution_rate,
+        "total_surplus_generated": round(total_surplus, 2),
+        "total_pot_contributions": round(total_contributions, 2),
+        "current_pot_balance": round(accumulated_pot, 2),
+        "days_evaluated": len(amounts),
+        "days_with_surplus": days_surplus,
+        "days_with_deficit": days_deficit,
+        "current_surplus_streak": surplus_streak,
+        "current_deficit_streak": deficit_streak,
+        "max_surplus_streak": max_surplus_streak,
+        "max_deficit_streak": max_deficit_streak,
+        "updated_status": status,
+        "status_reason": status_reason,
+        "status_cycle_history": cycle_history,
+        "daily_records_summary": daily_summaries,
+    }
+
+
 def calculate_savings_buffer(
     current_savings: float,
     df: pd.DataFrame,
     weekly_expenses: Optional[float] = None,
+    community_pot_balance: float = 0.0,
     target_weeks: float = 4.0,
     weight: float = WEIGHT_SAVINGS_BUFFER,
 ) -> MetricDetail:
     """
     Metric 4: Savings Buffer (Weight: 15%)
-    Goal: Gauge liquidity cushion.
-    Calculation: Compare total current emergency savings reserve against average weekly expenses.
+    Goal: Gauge liquidity cushion including personal emergency savings and community pot balance.
+    Calculation: Compare total accessible reserves against average weekly expenses.
     Target: 4 weeks of reserves = 100.0 score.
     """
     # Determine weekly burn rate
@@ -295,21 +448,25 @@ def calculate_savings_buffer(
     else:
         effective_weekly_burn = 350.0  # Safe default assumption ($50/day * 7)
 
+    total_accessible_reserves = float(current_savings) + float(community_pot_balance)
+
     if effective_weekly_burn <= 0:
         weeks_of_buffer = target_weeks
         normalized_score = 100.0
     else:
-        weeks_of_buffer = float(current_savings / effective_weekly_burn)
+        weeks_of_buffer = float(total_accessible_reserves / effective_weekly_burn)
         normalized_score = min(100.0, max(0.0, (weeks_of_buffer / target_weeks) * 100.0))
 
     normalized_score = round(normalized_score, 2)
     weeks_of_buffer = round(weeks_of_buffer, 2)
     effective_weekly_burn = round(effective_weekly_burn, 2)
     current_savings = round(float(current_savings), 2)
+    community_pot_balance = round(float(community_pot_balance), 2)
 
     tooltip = (
         f"Emergency reserve covers {weeks_of_buffer:.1f} weeks of expenses "
-        f"(${current_savings:.2f} savings vs ${effective_weekly_burn:.2f}/week expenses)."
+        f"(${total_accessible_reserves:.2f} total reserves [${current_savings:.2f} personal + ${community_pot_balance:.2f} pot] "
+        f"vs ${effective_weekly_burn:.2f}/week expenses)."
     )
 
     return MetricDetail(
@@ -321,12 +478,14 @@ def calculate_savings_buffer(
         standard_deviation=None,
         intermediate_calculations={
             "current_savings": current_savings,
+            "community_pot_balance": community_pot_balance,
+            "total_accessible_reserves": round(total_accessible_reserves, 2),
             "effective_weekly_burn": effective_weekly_burn,
             "weeks_of_buffer": weeks_of_buffer,
             "target_weeks": target_weeks,
             "is_expense_estimated": (weekly_expenses is None),
         },
-        description="Liquidity cushion measuring weeks of living expenses covered by reserves.",
+        description="Liquidity cushion measuring weeks of living expenses covered by personal reserves and community pot.",
         tooltip=tooltip,
     )
 
@@ -387,6 +546,15 @@ def extract_worker_metrics(input_data: WorkerDataInput) -> MetricsBreakdown:
     """
     df = parse_income_dataframe(input_data.income_history)
 
+    # Calculate threshold, surplus, and community pot metrics
+    pot_summary = calculate_pot_and_surplus_metrics(
+        df=df,
+        threshold=input_data.earning_threshold,
+        contribution_rate=input_data.pot_contribution_rate,
+        initial_pot_balance=input_data.community_pot_balance,
+        streak_window=7,
+    )
+
     m1 = calculate_income_consistency(df, weight=WEIGHT_INCOME_CONSISTENCY)
     m2 = calculate_work_frequency(
         df,
@@ -404,6 +572,7 @@ def extract_worker_metrics(input_data: WorkerDataInput) -> MetricsBreakdown:
         current_savings=input_data.current_savings,
         df=df,
         weekly_expenses=input_data.weekly_expenses,
+        community_pot_balance=input_data.community_pot_balance,
         target_weeks=4.0,
         weight=WEIGHT_SAVINGS_BUFFER,
     )
@@ -413,12 +582,23 @@ def extract_worker_metrics(input_data: WorkerDataInput) -> MetricsBreakdown:
         weight=WEIGHT_EXTERNAL_RISK,
     )
 
+    # Positive pot badges
+    pot_badges = []
+    if pot_summary.get("current_surplus_streak", 0) >= 7:
+        pot_badges.append("SUSTAINED_POT_CONTRIBUTOR")
+    if pot_summary.get("current_pot_balance", 0.0) > 0 or input_data.community_pot_balance > 0:
+        pot_badges.append("POT_PROTECTION_ACTIVE")
+    pot_summary["pot_badges"] = pot_badges
+
     raw_summary = {
         "worker_id": str(input_data.worker_id),
         "total_records_ingested": len(df),
         "current_savings": input_data.current_savings,
         "weekly_expenses": input_data.weekly_expenses,
         "weather_condition": input_data.weather_condition,
+        "earning_threshold": input_data.earning_threshold,
+        "pot_contribution_rate": input_data.pot_contribution_rate,
+        "accumulated_pot_balance": pot_summary["current_pot_balance"],
     }
 
     # Frontend explainability callouts
@@ -430,6 +610,13 @@ def extract_worker_metrics(input_data: WorkerDataInput) -> MetricsBreakdown:
         "vulnerability_areas": [
             m.name for m in [m1, m2, m3, m4, m5] if m.normalized_score < 40.0
         ],
+        "pot_status": pot_summary.get("updated_status"),
+        "pot_status_reason": pot_summary.get("status_reason"),
+        "status_cycle_transitions_count": len(pot_summary.get("status_cycle_history", [])),
+        "total_pot_contributions": pot_summary.get("total_pot_contributions", 0.0),
+        "current_deficit_streak_days": pot_summary.get("current_deficit_streak", 0),
+        "current_surplus_streak_days": pot_summary.get("current_surplus_streak", 0),
+        "positive_indicators": pot_badges,
     }
 
     return MetricsBreakdown(
@@ -438,6 +625,7 @@ def extract_worker_metrics(input_data: WorkerDataInput) -> MetricsBreakdown:
         recent_income_trend=m3,
         savings_buffer=m4,
         external_risk_factors=m5,
+        pot_summary=pot_summary,
         raw_inputs_summary=raw_summary,
         explainability_notes=explainability_notes,
     )
