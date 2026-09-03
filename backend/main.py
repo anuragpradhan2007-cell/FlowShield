@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, Header, HTTPException
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
 from auth import router as auth_router
@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 import schemas
 from auth.router import generate_sdk_token
+from auth.dependencies import require_worker
+import models
 
 Base.metadata.create_all(bind=engine)
 
@@ -35,24 +37,19 @@ def health_check():
 class MockHostTokenRequest(BaseModel):
     occupation: str
 
-# Mock server-side session store mapping session tokens to worker IDs
-MOCK_SESSION_STORE = {
-    "mock-session-123": "worker-1"
-}
-
 @app.post("/api/v1/mock-host/get-sdk-token")
 def mock_host_get_sdk_token(
     request: MockHostTokenRequest, 
-    host_session_token: str = Header(..., alias="X-Host-Session-Token"),
+    current_user: models.User = Depends(require_worker),
     db: Session = Depends(get_db)
 ):
     # This endpoint acts as the Mock Host's backend server.
-    # It authenticates the user via a trusted server-side session token
+    # It authenticates the user via the existing trusted authentication
     # and derives the worker_id securely.
-    if host_session_token not in MOCK_SESSION_STORE:
-        raise HTTPException(status_code=401, detail="Invalid host session token")
+    if not current_user.worker:
+        raise HTTPException(status_code=400, detail="Authenticated user is not a worker")
         
-    secure_worker_id = MOCK_SESSION_STORE[host_session_token]
+    secure_worker_id = current_user.worker.id
 
     # It injects the secure partner_api_key server-side so it's not exposed in the browser bundle.
     internal_request = schemas.SDKTokenRequest(

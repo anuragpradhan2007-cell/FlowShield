@@ -10,23 +10,44 @@ function App() {
 
   // Authenticate Mock Partner to get SDK Token for Worker 1
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/v1/mock-host/get-sdk-token", {
+    // 1. Register Mock Worker (fails gracefully if exists)
+    fetch("http://127.0.0.1:8000/api/v1/auth/register", {
       method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "X-Host-Session-Token": "mock-session-123" 
-      },
-      body: JSON.stringify({
-        occupation: "delivery_worker"
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "driver@foodflow.com", password: "mockpassword", occupation: "delivery_worker" })
     })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.access_token) {
-          setSdkToken(data.access_token);
-        }
+    .finally(() => {
+      // 2. Login to get trusted host session token (JWT)
+      fetch("http://127.0.0.1:8000/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "driver@foodflow.com", password: "mockpassword" })
       })
-      .catch((err) => console.error("SDK Auth Failed:", err));
+      .then(res => res.json())
+      .then(loginData => {
+        const hostToken = loginData.access_token;
+        if (!hostToken) return;
+        
+        // 3. Exchange host session token for B2B SDK Token
+        fetch("http://127.0.0.1:8000/api/v1/mock-host/get-sdk-token", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${hostToken}` 
+          },
+          body: JSON.stringify({
+            occupation: "delivery_worker"
+          })
+        })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.access_token) {
+            setSdkToken(data.access_token);
+          }
+        })
+        .catch((err) => console.error("SDK Auth Failed:", err));
+      });
+    });
   }, []);
 
   return (
