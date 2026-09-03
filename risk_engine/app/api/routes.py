@@ -15,6 +15,7 @@ from app.schemas.risk_score import (
 )
 from app.services.scoring import (
     evaluate_worker_risk,
+    evaluate_worker_risk_ml,
     detect_anomaly_flags,
 )
 
@@ -40,22 +41,26 @@ router = APIRouter(prefix="/workers", tags=["Risk Scores"])
     summary="Compute, explain, and store stability score from Member 2 data",
     description=(
         "Ingests structured worker income and transaction history prepared by Member 2. "
-        "Calculates the 5 feature metrics, logs exact feature weights and standard deviations, "
-        "bounds the composite score (0-100), assigns a standardized Risk Tier, and persists "
-        "the record to the Supabase database."
+        "Supports ML classification (GradientBoosting) or legacy formula scoring. "
+        "Bounds the composite score (0-100), assigns a standardized Risk Tier, and persists "
+        "the record to the database."
     ),
 )
 def calculate_and_store_risk_score(
     worker_id: uuid.UUID,
     payload: WorkerDataInput,
+    method: str = "ml",
     db: Session = Depends(get_db),
 ) -> RiskScoreResponse:
     # Ensure URL worker_id matches payload worker_id
     if payload.worker_id != worker_id:
         payload = payload.model_copy(update={"worker_id": worker_id})
 
-    # Execute 5-factor scoring engine
-    stability_score, risk_tier, breakdown, anomaly_flags = evaluate_worker_risk(payload)
+    # Execute scoring engine (ML model or formula)
+    if method.lower() == "ml":
+        stability_score, risk_tier, breakdown, anomaly_flags = evaluate_worker_risk_ml(payload)
+    else:
+        stability_score, risk_tier, breakdown, anomaly_flags = evaluate_worker_risk(payload)
 
     # Convert breakdown to dict for JSON/JSONB persistence
     metrics_data = breakdown.model_dump()
@@ -76,17 +81,36 @@ def calculate_and_store_risk_score(
     c_std = breakdown.income_consistency.standard_deviation if breakdown.income_consistency else 0.0
     c_mean = breakdown.income_consistency.mean if breakdown.income_consistency else 0.0
     logger.info(
-        "Worker: %s | Score: %.2f | Tier: %s | Income Mean: $%.2f | StdDev: $%.2f | "
-        "Flags: %s | Weights: [Cons:30%%, Freq:25%%, Trend:20%%, Sav:15%%, Ext:10%%]",
+        "Worker: %s | Score: %.2f | Tier: %s | Mode: %s | Income Mean: $%.2f | StdDev: $%.2f | Flags: %s",
         worker_id,
         stability_score,
         risk_tier.value,
+        method.upper(),
         c_mean,
         c_std,
         anomaly_flags,
     )
 
     return RiskScoreResponse.model_validate(db_record)
+
+
+@router.post(
+    "/{worker_id}/calculate-ml",
+    response_model=RiskScoreResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Compute stability score using trained ML Classifier (GradientBoosting)",
+    description=(
+        "Explicitly evaluates worker data using the trained GradientBoostingClassifier model. "
+        "Calculates class probabilities, learned feature importances, and maps probabilities "
+        "to a continuous 0-100 stability score."
+    ),
+)
+def calculate_and_store_risk_score_ml(
+    worker_id: uuid.UUID,
+    payload: WorkerDataInput,
+    db: Session = Depends(get_db),
+) -> RiskScoreResponse:
+    return calculate_and_store_risk_score(worker_id=worker_id, payload=payload, method="ml", db=db)
 
 
 @router.post(

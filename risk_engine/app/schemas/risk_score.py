@@ -82,6 +82,7 @@ class DailyIncomeRecord(BaseModel):
     amount: float = Field(ge=0.0, description="Gross income earned on this date")
     hours_worked: Optional[float] = Field(default=None, ge=0.0, description="Optional active hours")
     trips_completed: Optional[int] = Field(default=None, ge=0, description="Optional completed tasks/trips")
+    is_missing_data: Optional[bool] = Field(default=False, description="Flag indicating missing/unreported data gap")
 
 
 class WorkerDataInput(BaseModel):

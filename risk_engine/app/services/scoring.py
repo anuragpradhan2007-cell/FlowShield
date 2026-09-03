@@ -147,3 +147,66 @@ def evaluate_worker_risk(
     })
 
     return stability_score, risk_tier, breakdown, anomaly_flags
+
+
+def evaluate_worker_risk_ml(
+    input_data: WorkerDataInput,
+) -> Tuple[float, RiskTier, MetricsBreakdown, List[str]]:
+    """
+    ML-Driven end-to-end evaluation pipeline for a worker:
+    1. Extracts feature metrics for downstream frontend tooltips and telemetry.
+    2. Runs the trained GradientBoostingClassifier to predict risk tier and stability score.
+    3. Detects downstream anomaly trigger flags for Member 4.
+    4. Populates detailed ML explainability notes (probabilities, learned feature weights).
+    """
+    from app.ml.predictor import predict_risk, is_model_available
+
+    # Fallback to formula if ML model is unavailable
+    if not is_model_available():
+        return evaluate_worker_risk(input_data)
+
+    # 1. Standard feature metrics for Member 5 frontend tooltips
+    breakdown = extract_worker_metrics(input_data)
+
+    # 2. Format records for ML predictor
+    records = []
+    for r in input_data.income_history:
+        amt = float(r.amount)
+        is_missing = getattr(r, "is_missing_data", False)
+        is_missing = bool(is_missing) or (amt == 0.0)
+        records.append({
+            "date": r.date,
+            "amount": amt,
+            "is_missing_data": is_missing,
+        })
+
+    # 3. ML Model prediction
+    stability_score, risk_tier, ml_details = predict_risk(records)
+
+    # 4. Anomaly flags for Member 4
+    anomaly_flags = detect_anomaly_flags(breakdown, stability_score, risk_tier)
+
+    # 5. Enrich explainability notes with ML metrics
+    if breakdown.explainability_notes is None:
+        breakdown.explainability_notes = {}
+
+    probabilities = ml_details.get("class_probabilities", {})
+    breakdown.explainability_notes.update({
+        "scoring_mode": "Machine Learning (GradientBoostingClassifier)",
+        "composite_stability_score": stability_score,
+        "assigned_risk_tier": risk_tier.value,
+        "anomaly_flags_triggered": anomaly_flags,
+        "ml_details": ml_details,
+        "score_formula": (
+            f"ML Classifier Confidence: [Stable: {probabilities.get('Stable', 0.0):.1%}, "
+            f"At Risk: {probabilities.get('At Risk', 0.0):.1%}, "
+            f"Critical: {probabilities.get('Critical', 0.0):.1%}] "
+            f"-> Stability Score = {stability_score:.2f}"
+        ),
+        "tier_explanation": (
+            f"Worker classified as '{risk_tier.value}' by trained ML model with "
+            f"{probabilities.get(risk_tier.value, 0.0):.1%} prediction confidence."
+        ),
+    })
+
+    return stability_score, risk_tier, breakdown, anomaly_flags
