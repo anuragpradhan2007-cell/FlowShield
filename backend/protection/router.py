@@ -5,23 +5,22 @@ import models
 from auth.dependencies import require_worker
 from datetime import datetime, timedelta
 from app.ml.predictor import predict_risk, is_model_available
+from sqlalchemy.exc import IntegrityError
+from decimal import Decimal
 
 router = APIRouter()
 
-def calculate_worker_contribution(db: Session, worker_id: str):
-    now = datetime.utcnow()
-    one_week_ago = now - timedelta(days=7)
-    
+def calculate_worker_contribution(db: Session, worker_id: str, period_start: datetime):
     earnings = db.query(models.Earning).filter(
         models.Earning.worker_id == worker_id,
-        models.Earning.period_end >= one_week_ago
+        models.Earning.period_end >= period_start
     ).all()
     
     if not earnings:
-        return 0.0
+        return Decimal("0.00")
         
-    total_earnings = sum([float(e.amount) for e in earnings])
-    return total_earnings * 0.10
+    total_earnings = sum([Decimal(str(e.amount)) for e in earnings])
+    return total_earnings * Decimal("0.10")
 
 def get_real_risk(db: Session, worker_id: str):
     earnings = db.query(models.Earning).filter(
@@ -43,43 +42,47 @@ def auto_contribute(
     current_user: models.User = Depends(require_worker)
 ):
     worker_id = current_user.worker.id
-    contribution = calculate_worker_contribution(db, worker_id)
+    try:
+        pot = db.query(models.EmergencyPot).filter(
+            models.EmergencyPot.worker_id == worker_id
+        ).with_for_update().first()
+        
+        if pot is None:
+            pot = models.EmergencyPot(
+                worker_id=worker_id,
+                balance=Decimal("0.00"),
+                total_contributed=Decimal("0.00"),
+                total_used=Decimal("0.00"),
+                period_contributed=Decimal("0.00"),
+                period_start=datetime.utcnow() - timedelta(days=7)
+            )
+            db.add(pot)
+            db.flush()
+    except IntegrityError:
+        db.rollback()
+        pot = db.query(models.EmergencyPot).filter(
+            models.EmergencyPot.worker_id == worker_id
+        ).with_for_update().first()
+
+    period_boundary = datetime.utcnow() - timedelta(days=7)
+    if pot.period_start < period_boundary:
+        pot.period_contributed = Decimal("0.00")
+        pot.period_start = period_boundary
+
+    contribution = calculate_worker_contribution(db, worker_id, pot.period_start)
 
     if contribution <= 0:
         return {"message": "No recent earnings to contribute from"}
 
-    pot = db.query(models.EmergencyPot).filter(
-        models.EmergencyPot.worker_id == worker_id
-    ).with_for_update().first()
-
-    if pot is None:
-        pot = models.EmergencyPot(
-            worker_id=worker_id,
-            balance=0.0,
-            total_contributed=0.0,
-            total_used=0.0,
-            period_contributed=0.0,
-            period_start=datetime.utcnow()
-        )
-        db.add(pot)
-    else:
-        # Check if we are in a new rolling period
-        one_week_ago = datetime.utcnow() - timedelta(days=7)
-        if pot.period_start < one_week_ago:
-            pot.period_contributed = 0.0
-            pot.period_start = datetime.utcnow()
-
-    total_target = round(contribution, 2)
-    new_contribution = total_target - float(pot.period_contributed)
+    total_target = contribution.quantize(Decimal("0.01"))
+    new_contribution = total_target - Decimal(str(pot.period_contributed))
     
-    if new_contribution < 0:
-        new_contribution = 0.0
+    if new_contribution < Decimal("0.00"):
+        new_contribution = Decimal("0.00")
 
-    new_contribution = round(new_contribution, 2)
-    
-    pot.balance = float(pot.balance) + new_contribution
-    pot.total_contributed = float(pot.total_contributed) + new_contribution
-    pot.period_contributed = float(pot.period_contributed) + new_contribution
+    pot.balance = Decimal(str(pot.balance)) + new_contribution
+    pot.total_contributed = Decimal(str(pot.total_contributed)) + new_contribution
+    pot.period_contributed = Decimal(str(pot.period_contributed)) + new_contribution
 
     db.commit()
     db.refresh(pot)
@@ -92,17 +95,20 @@ def auto_contribute(
 
 @router.post("/emergency-pot/release")
 def release_emergency_funds(
-    requested_amount: float,
+    requested_amount: Decimal,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_worker)
 ):
+    if requested_amount.as_tuple().exponent < -2:
+        raise HTTPException(status_code=400, detail="Requested amount exceeds two decimal precision")
+
     worker_id = current_user.worker.id
     
     pot = db.query(models.EmergencyPot).filter(
         models.EmergencyPot.worker_id == worker_id
     ).with_for_update().first()
 
-    if pot is None or pot.balance <= 0:
+    if pot is None or Decimal(str(pot.balance)) <= 0:
         raise HTTPException(status_code=400, detail="Insufficient Emergency Pot funds")
 
     risk_data = get_real_risk(db, worker_id)
@@ -111,20 +117,19 @@ def release_emergency_funds(
 
     risk_tier = risk_data["risk_tier"]
     
-    # Financial Protection Rule: Only Critical Risk gets release
     if risk_tier != "Critical":
         return {
             "emergency_support": False,
-            "release_amount": 0,
+            "release_amount": Decimal("0.00"),
             "reason": "Worker is not in Critical risk."
         }
         
-    release_amount = min(pot.balance, requested_amount)
+    release_amount = min(Decimal(str(pot.balance)), requested_amount)
     if release_amount <= 0:
         raise HTTPException(status_code=400, detail="Requested amount must be greater than zero")
 
-    pot.balance = float(pot.balance) - release_amount
-    pot.total_used = float(pot.total_used) + release_amount
+    pot.balance = Decimal(str(pot.balance)) - release_amount
+    pot.total_used = Decimal(str(pot.total_used)) + release_amount
 
     notification = models.Notification(
         worker_id=worker_id,

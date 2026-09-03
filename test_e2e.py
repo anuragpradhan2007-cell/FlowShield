@@ -93,7 +93,7 @@ assert "credit_limit" in credit_resp, "Missing credit_limit in credit response"
 
 # 7. Re-check dashboard for emergency fund persistence
 print("Verifying Dashboard emergencyFund...")
-resp = requests.get(f"{BASE_URL}/api/v1/dashboard/worker/me", headers=headers)
+resp = requests.get(f"{BASE_URL}/api/v1/dashboard/worker/me", headers=headers, timeout=10)
 if resp.status_code != 200:
     print("Failed to get dashboard:", resp.text)
     exit(1)
