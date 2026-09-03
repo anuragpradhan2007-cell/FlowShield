@@ -2,10 +2,16 @@ import workerData from "../worker-dashboard/workerData";
 
 const API_URL = "http://localhost:8000";
 
-export async function getWorkerDashboard(workerId) {
+export async function getWorkerDashboard(workerId, token) {
   try {
+    const headers = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const response = await fetch(
-      `${API_URL}/dashboard/worker/${workerId}`
+      `${API_URL}/api/v1/dashboard/worker/${workerId}`,
+      { headers }
     );
 
     if (!response.ok) {

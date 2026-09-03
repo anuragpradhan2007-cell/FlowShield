@@ -4,6 +4,7 @@ from database import engine, Base
 from auth import router as auth_router
 from users import router as users_router
 from workers import router as workers_router
+import dashboard_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -20,6 +21,7 @@ app.add_middleware(
 app.include_router(auth_router.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(users_router.router, prefix="/api/v1", tags=["users"])
 app.include_router(workers_router.router, prefix="/api/v1/workers", tags=["workers"])
+app.include_router(dashboard_router.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 
 @app.get("/api/v1/health")
 def health_check():

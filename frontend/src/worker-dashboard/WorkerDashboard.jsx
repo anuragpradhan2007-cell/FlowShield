@@ -9,12 +9,12 @@ import IncomeChart from "./components/IncomeChart";
 import EmergencyFund from "./components/EmergencyFund";
 import RecommendationCard from "./components/RecommendationCard";
 
-function WorkerDashboard({ workerId }) {
+function WorkerDashboard({ workerId, token }) {
   const [workerData, setWorkerData] = useState(null);
 
   useEffect(() => {
     async function loadWorkerData() {
-      const data = await getWorkerDashboard(workerId);
+      const data = await getWorkerDashboard(workerId, token);
       setWorkerData(data);
     }
 

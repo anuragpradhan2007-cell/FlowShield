@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import Home from "./pages/Home";
 import Search from "./pages/Search";
@@ -6,6 +6,27 @@ import WorkerDashboard from "./worker-dashboard/WorkerDashboard";
 
 function App() {
   const [currentView, setCurrentView] = useState("home");
+  const [sdkToken, setSdkToken] = useState(null);
+
+  // Authenticate Mock Partner to get SDK Token for Worker 1
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/api/v1/auth/sdk/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partner_api_key: "mock-partner-key-123",
+        host_worker_id: "worker-1",
+        occupation: "delivery_worker"
+      })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.access_token) {
+          setSdkToken(data.access_token);
+        }
+      })
+      .catch((err) => console.error("SDK Auth Failed:", err));
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -56,7 +77,7 @@ function App() {
 
         {/* FlowShield */}
         {currentView === "safety" && (
-          <WorkerDashboard workerId={1} />
+          <WorkerDashboard workerId={1} token={sdkToken} />
         )}
 
         {/* Cart */}
