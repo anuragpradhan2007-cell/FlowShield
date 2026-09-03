@@ -1,6 +1,5 @@
-import workerData from "../worker-dashboard/workerData";
 
-const API_URL = "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export async function getWorkerDashboard(token) {
   try {
@@ -22,8 +21,7 @@ export async function getWorkerDashboard(token) {
 
     return data;
   } catch (error) {
-    console.log("Using demo worker data:", error.message);
-
-    return workerData;
+    console.error("Failed to fetch worker dashboard:", error.message);
+    throw error;
   }
 }

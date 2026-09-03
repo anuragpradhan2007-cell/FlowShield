@@ -21,32 +21,66 @@ def get_worker_dashboard_me(
 
     # Fetch earnings (mocked computation based on Member 2's goal)
     # Ideally, we would sum the models.Earning records here.
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     one_week_ago = now - timedelta(days=7)
     
+    from app.ml.predictor import predict_risk, is_model_available
+
     earnings = db.query(models.Earning).filter(
-        models.Earning.worker_id == worker_id,
-        models.Earning.period_end >= one_week_ago
+        models.Earning.worker_id == worker_id
     ).all()
     
-    weekly_income = sum([e.amount for e in earnings]) if earnings else 0.0
+    weekly_income = sum([float(e.amount) for e in earnings if e.period_end >= one_week_ago]) if earnings else 0.0
     
-    # Format the data exactly as the frontend expects
+    # Run Inference
+    stability_score = 0
+    risk_level = "UNKNOWN"
+    if is_model_available() and earnings:
+        earnings_records = [{"date": e.period_end, "amount": float(e.amount), "is_missing_data": e.is_missing_data} for e in earnings]
+        try:
+            score, tier, details = predict_risk(earnings_records)
+            stability_score = score
+            risk_level = tier.value
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"ML Prediction failed: {str(e)}")
+
+
+    # Calculate real income history
+    income_history = []
+    # Group earnings by day of week for the past 7 days
+    day_map = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri", 5: "Sat", 6: "Sun"}
+    
+    # Initialize past 7 days with 0
+    history_dict = {}
+    for i in range(7):
+        d = now - timedelta(days=i)
+        history_dict[d.strftime('%Y-%m-%d')] = 0.0
+
+    for e in earnings:
+        if e.period_end >= one_week_ago:
+            date_str = e.period_end.strftime('%Y-%m-%d')
+            if date_str in history_dict:
+                history_dict[date_str] += float(e.amount)
+
+    for date_str, amount in reversed(history_dict.items()):
+        dt = datetime.strptime(date_str, '%Y-%m-%d')
+        income_history.append({"day": day_map[dt.weekday()], "income": amount})
+
+    two_weeks_ago = one_week_ago - timedelta(days=7)
+    previous_weekly_income = sum([float(e.amount) for e in earnings if two_weeks_ago <= e.period_end < one_week_ago])
+    
+    income_change = 0.0
+    if previous_weekly_income > 0:
+        income_change = ((weekly_income - previous_weekly_income) / previous_weekly_income) * 100
+
     return {
-        "name": "Delivery Partner", # Default mock name if no profile name
+        "name": current_user.email.split('@')[0],
         "role": worker.occupation,
-        "stabilityScore": 78, # Hardcoded for now (Member 3 AI Engine task)
+        "stabilityScore": stability_score,
+        "riskLevel": risk_level,
         "weeklyIncome": weekly_income,
-        "incomeChange": 12.5,
-        "emergencyFund": 1500,
-        "emergencyTarget": 5000,
-        "incomeHistory": [
-            {"day": "Mon", "income": 500},
-            {"day": "Tue", "income": 650},
-            {"day": "Wed", "income": 400},
-            {"day": "Thu", "income": 800},
-            {"day": "Fri", "income": 750},
-            {"day": "Sat", "income": 900},
-            {"day": "Sun", "income": 200},
-        ]
+        "incomeChange": round(income_change, 1),
+        "emergencyFund": 0,
+        "emergencyTarget": 0,
+        "incomeHistory": income_history
     }

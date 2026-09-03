@@ -5,6 +5,15 @@ import schemas
 import models
 from auth.dependencies import require_worker
 import uuid
+from pydantic import BaseModel
+from datetime import datetime
+
+class EarningCreate(BaseModel):
+    amount: float
+    period_start: datetime
+    period_end: datetime
+    is_missing_data: bool = False
+    currency: str = "USD"
 
 router = APIRouter()
 
@@ -29,3 +38,30 @@ def read_worker(
         )
         
     return worker
+
+@router.post("/{worker_id}/earnings")
+def create_worker_earning(
+    worker_id: str,
+    earning: EarningCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_worker)
+):
+    if current_user.worker.id != worker_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Forbidden: Cannot add data for another worker"
+        )
+    
+    new_earning = models.Earning(
+        worker_id=worker_id,
+        amount=earning.amount,
+        period_start=earning.period_start,
+        period_end=earning.period_end,
+        is_missing_data=earning.is_missing_data,
+        currency=earning.currency
+    )
+    db.add(new_earning)
+    db.commit()
+    db.refresh(new_earning)
+    
+    return new_earning

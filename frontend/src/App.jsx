@@ -9,16 +9,18 @@ function App() {
   const [sdkToken, setSdkToken] = useState(null);
 
   // Authenticate Mock Partner to get SDK Token for Worker 1
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
   useEffect(() => {
     // 1. Register Mock Worker (fails gracefully if exists)
-    fetch("http://127.0.0.1:8000/api/v1/auth/register", {
+    fetch(`${API_URL}/api/v1/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "driver@foodflow.com", password: "mockpassword", occupation: "delivery_worker" })
     })
     .finally(() => {
       // 2. Login to get trusted host session token (JWT)
-      fetch("http://127.0.0.1:8000/api/v1/auth/login", {
+      fetch(`${API_URL}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: "driver@foodflow.com", password: "mockpassword" })
@@ -29,7 +31,7 @@ function App() {
         if (!hostToken) return;
         
         // 3. Exchange host session token for B2B SDK Token
-        fetch("http://127.0.0.1:8000/api/v1/mock-host/get-sdk-token", {
+        fetch(`${API_URL}/api/v1/mock-host/get-sdk-token`, {
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
