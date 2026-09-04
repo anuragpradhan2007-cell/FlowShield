@@ -22,10 +22,11 @@ FEATURE_NAMES = [
     "max_earnings",
     "total_earnings",
     "total_days",
+    "emergency_fund"
 ]
 
 
-def extract_features(records: List[Dict[str, Any]]) -> np.ndarray:
+def extract_features(records: List[Dict[str, Any]], emergency_fund: float = 0.0) -> np.ndarray:
     """
     Extract a feature vector from a list of daily earnings records for one worker.
 
@@ -98,6 +99,7 @@ def extract_features(records: List[Dict[str, Any]]) -> np.ndarray:
             max_earnings,
             total_earnings,
             float(len(records)),
+            float(emergency_fund),
         ]
     )
 

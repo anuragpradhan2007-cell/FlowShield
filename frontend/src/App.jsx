@@ -3,10 +3,11 @@ import { useState, useEffect } from "react";
 import Home from "./pages/Home";
 import Search from "./pages/Search";
 import WorkerDashboard from "./worker-dashboard/WorkerDashboard";
+import PartnerDashboard from "./pages/partner/PartnerDashboard";
 
 function App() {
   const [currentView, setCurrentView] = useState("home");
-  const [sdkToken, setSdkToken] = useState(null);
+  const [hostToken, setHostToken] = useState(null);
 
   // Authenticate Mock Partner to get SDK Token for Worker 1
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -27,28 +28,11 @@ function App() {
       })
       .then(res => res.json())
       .then(loginData => {
-        const hostToken = loginData.access_token;
-        if (!hostToken) return;
-        
-        // 3. Exchange host session token for B2B SDK Token
-        fetch(`${API_URL}/api/v1/sdk/worker/get-token`, {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${hostToken}` 
-          },
-          body: JSON.stringify({
-            occupation: "delivery_worker"
-          })
-        })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.sdk_token) {
-            setSdkToken(data.sdk_token);
-          }
-        })
-        .catch((err) => console.error("SDK Auth Failed:", err));
-      });
+        if (loginData.access_token) {
+          setHostToken(loginData.access_token);
+        }
+      })
+      .catch((err) => console.error("Login Failed:", err));
     });
   }, []);
 
@@ -89,6 +73,11 @@ function App() {
       {/* Main Content */}
       <div className="max-w-md mx-auto pb-24">
 
+        {/* Partner Dashboard Override */}
+        {currentView === "partner" && (
+          <PartnerDashboard />
+        )}
+
         {/* Home */}
         {currentView === "home" && (
           <Home />
@@ -101,7 +90,7 @@ function App() {
 
         {/* FlowShield */}
         {currentView === "safety" && (
-          <WorkerDashboard token={sdkToken} />
+          <WorkerDashboard token={hostToken} />
         )}
 
         {/* Cart */}
@@ -178,7 +167,14 @@ function App() {
                   🛡️ FlowShield Financial Safety
                 </button>
 
-                <button className="w-full text-left p-3 rounded-xl hover:bg-slate-50">
+                <button
+                  onClick={() => setCurrentView("partner")}
+                  className="w-full text-left p-3 rounded-xl bg-green-50 text-green-700 font-medium mt-2"
+                >
+                  🏢 Partner Portal Login
+                </button>
+
+                <button className="w-full text-left p-3 rounded-xl hover:bg-slate-50 mt-2">
                   ⚙️ Settings
                 </button>
 

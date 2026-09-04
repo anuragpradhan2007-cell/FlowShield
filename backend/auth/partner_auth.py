@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 import secrets
+import hashlib
 import models
 from auth.security import get_password_hash, verify_password, create_access_token
 
@@ -19,13 +20,16 @@ class PartnerAuthService:
         
         # Generate API key
         api_key = f"sk_{secrets.token_urlsafe(32)}"
+        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        signing_secret = secrets.token_urlsafe(64)
         
         # Create partner
         partner = models.Partner(
             name=name,
             email=email,
             password_hash=get_password_hash(password),
-            api_key=api_key
+            api_key_hash=api_key_hash,
+            signing_secret=signing_secret
         )
         
         self.db.add(partner)
@@ -36,7 +40,8 @@ class PartnerAuthService:
             "partner_id": str(partner.id),
             "name": partner.name,
             "email": partner.email,
-            "api_key": api_key  # Only shown once
+            "api_key": api_key,  # Only shown once
+            "signing_secret": signing_secret # Only shown once
         }
 
     def login_partner(self, email: str, password: str) -> dict:
@@ -66,7 +71,8 @@ class PartnerAuthService:
     def verify_api_key(self, api_key: str) -> dict:
         """Verify partner API key"""
         
-        partner = self.db.query(models.Partner).filter(models.Partner.api_key == api_key).first()
+        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        partner = self.db.query(models.Partner).filter(models.Partner.api_key_hash == api_key_hash).first()
         
         if not partner or partner.status != "active":
             raise HTTPException(status_code=401, detail="Invalid API key")

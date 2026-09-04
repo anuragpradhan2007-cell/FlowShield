@@ -7,10 +7,21 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from database import SessionLocal
 import models
 from auth.security import get_password_hash
+import hashlib
+import secrets
 
 def setup_demo_partner():
     """Create a demo partner for testing"""
     
+    if os.environ.get("ENVIRONMENT") != "development":
+        print("ERROR: Refusing to execute demo setup outside of a development environment.")
+        sys.exit(1)
+        
+    password = os.environ.get("DEMO_PARTNER_PASSWORD")
+    if not password:
+        print("ERROR: DEMO_PARTNER_PASSWORD environment variable must be set.")
+        sys.exit(1)
+        
     session = SessionLocal()
     
     # Check if demo partner exists
@@ -23,12 +34,17 @@ def setup_demo_partner():
         session.close()
         return
     
+    api_key = f"sk_demo_{secrets.token_urlsafe(32)}"
+    api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    signing_secret = secrets.token_urlsafe(64)
+    
     # Create demo partner
     demo_partner = models.Partner(
         name="Demo Partner",
         email="demo-partner@flowshield.local",
-        password_hash=get_password_hash("DemoPassword123!"),
-        api_key="sk_live_demo_partner_key_123456",
+        password_hash=get_password_hash(password),
+        api_key_hash=api_key_hash,
+        signing_secret=signing_secret,
         commission_rate=10.0,
         status="active"
     )
@@ -38,8 +54,9 @@ def setup_demo_partner():
     
     print(f"[SUCCESS] Demo partner created")
     print(f"  Email: demo-partner@flowshield.local")
-    print(f"  Password: DemoPassword123!")
-    print(f"  API Key: {demo_partner.api_key}")
+    print(f"  Password: (from DEMO_PARTNER_PASSWORD)")
+    print(f"  API Key: {api_key}")
+    print(f"  Signing Secret: {signing_secret}")
     
     session.close()
 

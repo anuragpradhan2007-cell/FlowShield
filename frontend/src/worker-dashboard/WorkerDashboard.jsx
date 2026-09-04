@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-
-import { getWorkerDashboard } from "../api/workerApi";
+import { WorkerSDKModal } from "../components/SDK/WorkerSDKModal";
+import { getWorkerDashboard, addEarning } from "../api/workerApi";
 
 import ProfileCard from "./components/ProfileCard";
 import StabilityCard from "./components/StabilityCard";
@@ -11,15 +11,33 @@ import RecommendationCard from "./components/RecommendationCard";
 
 function WorkerDashboard({ token }) {
   const [workerData, setWorkerData] = useState(null);
+  const [isSDKModalOpen, setIsSDKModalOpen] = useState(false);
+  const [error, setError] = useState(null);
+  const [isAddingEarning, setIsAddingEarning] = useState(false);
+  const [earningAmount, setEarningAmount] = useState("");
 
   useEffect(() => {
     async function loadWorkerData() {
-      const data = await getWorkerDashboard(token);
-      setWorkerData(data);
+      try {
+        const data = await getWorkerDashboard(token);
+        setWorkerData(data);
+      } catch (err) {
+        setError(err.message || "Failed to load financial data");
+      }
     }
 
-    loadWorkerData();
+    if (token) {
+      loadWorkerData();
+    }
   }, [token]);
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-10">
+        <p className="text-sm text-red-600">Error: {error}</p>
+      </div>
+    );
+  }
 
   if (!workerData) {
     return (
@@ -30,6 +48,23 @@ function WorkerDashboard({ token }) {
       </div>
     );
   }
+
+  const handleAddEarning = async (e) => {
+    e.preventDefault();
+    if (!earningAmount || isNaN(earningAmount)) return;
+
+    setIsAddingEarning(true);
+    try {
+      await addEarning(token, parseFloat(earningAmount));
+      const data = await getWorkerDashboard(token);
+      setWorkerData(data);
+      setEarningAmount("");
+    } catch (err) {
+      alert("Failed to add earning");
+    } finally {
+      setIsAddingEarning(false);
+    }
+  };
 
   return (
     <main className="bg-slate-50">
@@ -51,6 +86,24 @@ function WorkerDashboard({ token }) {
             Simple insights to help you manage your earnings and savings.
           </p>
 
+          <form onSubmit={handleAddEarning} className="mt-4 flex gap-2">
+            <input
+              type="number"
+              step="0.01"
+              value={earningAmount}
+              onChange={(e) => setEarningAmount(e.target.value)}
+              placeholder="Earning Amount ($)"
+              className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              required
+            />
+            <button
+              type="submit"
+              disabled={isAddingEarning}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isAddingEarning ? "Adding..." : "Add Earning"}
+            </button>
+          </form>
         </div>
 
         {/* Profile */}
@@ -115,7 +168,27 @@ function WorkerDashboard({ token }) {
 
         </section>
 
+        {/* Partner Services */}
+        <section className="mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <h2 className="text-xl font-bold mb-2">Financial Protection</h2>
+          <p className="text-sm text-slate-600 mb-4">
+            Access emergency funds, micro-credit, and savings tools from our partners.
+          </p>
+          <button
+            onClick={() => setIsSDKModalOpen(true)}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+          >
+            Access Partner Services
+          </button>
+        </section>
+
       </div>
+
+      <WorkerSDKModal 
+        isOpen={isSDKModalOpen}
+        onClose={() => setIsSDKModalOpen(false)}
+        workerToken={token}
+      />
 
     </main>
   );

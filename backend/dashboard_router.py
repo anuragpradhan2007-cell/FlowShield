@@ -4,8 +4,34 @@ from database import get_db
 import models
 from auth.dependencies import require_worker
 from datetime import datetime, timedelta, timezone
+import random
+from pydantic import BaseModel
+
+class EarningCreate(BaseModel):
+    amount: float
 
 router = APIRouter()
+
+@router.post("/worker/add-earning")
+def add_earning(
+    earning_in: EarningCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_worker)
+):
+    worker_id = current_user.worker.id
+    now = datetime.utcnow()
+    
+    earning = models.Earning(
+        worker_id=worker_id,
+        amount=earning_in.amount,
+        period_start=now,
+        period_end=now,
+        is_missing_data=False
+    )
+    db.add(earning)
+    db.commit()
+    
+    return {"message": "Earning added successfully"}
 
 @router.get("/worker/me")
 def get_worker_dashboard_me(
@@ -32,18 +58,24 @@ def get_worker_dashboard_me(
     
     weekly_income = sum([float(e.amount) for e in earnings if e.period_end >= one_week_ago]) if earnings else 0.0
     
+    emergency_pot = db.query(models.EmergencyPot).filter(
+        models.EmergencyPot.worker_id == worker_id
+    ).first()
+    
+    emergency_fund = emergency_pot.balance if emergency_pot else 0.0
+    emergency_target = round(weekly_income * 0.10, 2)
+    
     # Run Inference
     stability_score = 0
     risk_level = "UNKNOWN"
     if is_model_available() and earnings:
         earnings_records = [{"date": e.period_end, "amount": float(e.amount), "is_missing_data": e.is_missing_data} for e in earnings]
         try:
-            score, tier, details = predict_risk(earnings_records)
+            score, tier, details = predict_risk(earnings_records, emergency_fund=emergency_fund)
             stability_score = score
             risk_level = tier.value
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"ML Prediction failed: {str(e)}")
-
 
     # Calculate real income history
     income_history = []
@@ -72,13 +104,6 @@ def get_worker_dashboard_me(
     income_change = 0.0
     if previous_weekly_income > 0:
         income_change = ((weekly_income - previous_weekly_income) / previous_weekly_income) * 100
-
-    emergency_pot = db.query(models.EmergencyPot).filter(
-        models.EmergencyPot.worker_id == worker_id
-    ).first()
-    
-    emergency_fund = emergency_pot.balance if emergency_pot else 0.0
-    emergency_target = round(weekly_income * 0.10, 2)
 
     return {
         "name": current_user.email.split('@')[0],

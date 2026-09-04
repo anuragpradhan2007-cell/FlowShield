@@ -57,6 +57,7 @@ def is_model_available() -> bool:
 
 def predict_risk(
     earnings_records: List[Dict[str, Any]],
+    emergency_fund: float = 0.0
 ) -> Tuple[float, RiskTier, Dict[str, Any]]:
     """
     Predict worker risk tier and stability score from earnings records.
@@ -74,7 +75,7 @@ def predict_risk(
     model, scaler = _load_model()
 
     # ── Feature extraction (same pipeline as training) ───────────────────
-    features = extract_features(earnings_records)
+    features = extract_features(earnings_records, emergency_fund=emergency_fund)
     features_scaled = scaler.transform(features.reshape(1, -1))
 
     # ── Inference ────────────────────────────────────────────────────────

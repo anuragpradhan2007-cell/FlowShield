@@ -88,7 +88,15 @@ def train(n_samples_per_class: int = 200, seed: int = 42) -> None:
     for profile, label in LABEL_MAP.items():
         for _ in range(n_samples_per_class):
             records = generate_worker_earnings(profile, n_days=61)
-            features = extract_features(records)
+            
+            if profile == "stable":
+                ef = random.uniform(100.0, 500.0)
+            elif profile == "at_risk":
+                ef = random.uniform(20.0, 100.0)
+            else:
+                ef = random.uniform(0.0, 20.0)
+                
+            features = extract_features(records, emergency_fund=ef)
             X.append(features)
             y.append(label)
 

@@ -39,6 +39,8 @@ class Worker(Base):
     emergency_pot = relationship("EmergencyPot", back_populates="worker", uselist=False)
     credit_assessments = relationship("CreditAssessment", back_populates="worker")
     notifications = relationship("Notification", back_populates="worker")
+    sdk_tokens = relationship("SDKToken", back_populates="worker", cascade="all, delete-orphan")
+    partner_enrollments = relationship("PartnerWorker", back_populates="worker", cascade="all, delete-orphan")
 
 class Earning(Base):
     __tablename__ = "earnings"
@@ -107,72 +109,113 @@ class Notification(Base):
 
 class Partner(Base):
     __tablename__ = "partners"
+
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
-    name = Column(String, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=False)
-    api_key = Column(String, unique=True, index=True, nullable=False)
-    webhook_url = Column(Text, nullable=True)
-    status = Column(String, default="active")
-    commission_rate = Column(Numeric(5, 2), default=10.00)
-    total_earnings = Column(Numeric(15, 2), default=0.00)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    
+    # API Management
+    api_key = Column(String(255), unique=True, nullable=False, index=True)
+    webhook_url = Column(String(500))
+    
+    # Business Metrics
+    commission_rate = Column(Float, default=10.0)  # Percentage
+    total_earnings = Column(Float, default=0.0)
     total_workers = Column(Integer, default=0)
+    
+    # Status
+    status = Column(String(50), default="active")  # active, suspended, inactive
+    
+    # Timestamps
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    # Relationships
+    api_keys = relationship("PartnerAPIKey", back_populates="partner", cascade="all, delete-orphan")
+    sdk_tokens = relationship("SDKToken", back_populates="partner", cascade="all, delete-orphan")
+    workers = relationship("PartnerWorker", back_populates="partner", cascade="all, delete-orphan")
+    commissions = relationship("PartnerCommission", back_populates="partner", cascade="all, delete-orphan")
 
-    api_keys = relationship("PartnerAPIKey", back_populates="partner")
-    sdk_tokens = relationship("SDKToken", back_populates="partner")
-    enrolled_workers = relationship("PartnerWorker", back_populates="partner")
-    commissions = relationship("PartnerCommission", back_populates="partner")
 
 class PartnerAPIKey(Base):
     __tablename__ = "partner_api_keys"
+
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     partner_id = Column(String, ForeignKey("partners.id", ondelete="CASCADE"), nullable=False, index=True)
-    key_value = Column(String, unique=True, nullable=False)
-    secret_hash = Column(String, nullable=False)
-    name = Column(String, nullable=True)
+    
+    # Key Management
+    key_value = Column(String(255), unique=True, nullable=False)
+    secret_hash = Column(String(255), nullable=False)
+    name = Column(String(100))
+    
+    # Status
     is_active = Column(Boolean, default=True)
+    
+    # Timestamps
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    rotated_at = Column(DateTime, nullable=True)
-
+    rotated_at = Column(DateTime)
+    
+    # Relationships
     partner = relationship("Partner", back_populates="api_keys")
+
 
 class SDKToken(Base):
     __tablename__ = "sdk_tokens"
+
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     worker_id = Column(String, ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
     partner_id = Column(String, ForeignKey("partners.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Token Data
     token = Column(String(512), unique=True, nullable=False)
-    token_hash = Column(String, nullable=True)
+    token_hash = Column(String(255), unique=True)
+    
+    # Lifecycle
     expires_at = Column(DateTime, nullable=False)
-    used_at = Column(DateTime, nullable=True)
+    used_at = Column(DateTime)
+    
+    # Timestamps
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    worker = relationship("Worker")
+    
+    # Relationships
+    worker = relationship("Worker", back_populates="sdk_tokens")
     partner = relationship("Partner", back_populates="sdk_tokens")
+
 
 class PartnerWorker(Base):
     __tablename__ = "partner_workers"
+
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     partner_id = Column(String, ForeignKey("partners.id", ondelete="CASCADE"), nullable=False, index=True)
     worker_id = Column(String, ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    status = Column(String, default="active")
+    
+    # Status
+    status = Column(String(50), default="active")  # active, inactive
+    
+    # Timestamps
     enrolled_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    # Relationships
+    partner = relationship("Partner", back_populates="workers")
+    worker = relationship("Worker", back_populates="partner_enrollments")
 
-    partner = relationship("Partner", back_populates="enrolled_workers")
-    worker = relationship("Worker")
 
 class PartnerCommission(Base):
     __tablename__ = "partner_commissions"
+
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     partner_id = Column(String, ForeignKey("partners.id", ondelete="CASCADE"), nullable=False, index=True)
     worker_id = Column(String, ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
-    transaction_id = Column(String, nullable=True)
-    amount = Column(Numeric(15, 2), nullable=False)
-    commission_rate = Column(Numeric(5, 2), nullable=True)
+    
+    # Transaction Data
+    transaction_id = Column(String)
+    amount = Column(Float, nullable=False)
+    commission_rate = Column(Float)
+    
+    # Lifecycle
     earned_at = Column(DateTime, default=datetime.datetime.utcnow)
-    paid_at = Column(DateTime, nullable=True)
-
+    paid_at = Column(DateTime)
+    
+    # Relationships
     partner = relationship("Partner", back_populates="commissions")
-    worker = relationship("Worker")

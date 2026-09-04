@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 import schemas
 import sdk_router
+import partner_router
 import models
 from app.ml.predictor import _load_model, is_model_available
 
@@ -46,6 +47,7 @@ app.include_router(dashboard_router.router, prefix="/api/v1/dashboard", tags=["d
 app.include_router(risk_router.router, prefix="/api/v1/workers", tags=["risk"])
 app.include_router(protection_router.router, prefix="/api/v1/protection", tags=["protection"])
 app.include_router(sdk_router.router, prefix="/api/v1/sdk", tags=["sdk"])
+app.include_router(partner_router.router, prefix="/api/v1/partner", tags=["partner"])
 
 @app.get("/api/v1/health")
 def health_check():
