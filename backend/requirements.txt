@@ -9,3 +9,6 @@ passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.9
 psycopg2-binary>=2.9.9
 email-validator>=2.1.0
+scikit-learn>=1.2.0
+numpy>=1.23.0
+joblib>=1.2.0
